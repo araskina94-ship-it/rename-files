@@ -20,7 +20,7 @@ $script:renameMode = "barcode"  # "barcode" or "sequential"
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Rename Tool"
-$form.Size = New-Object System.Drawing.Size(500, 450)
+$form.Size = New-Object System.Drawing.Size(500, 475)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -184,21 +184,112 @@ $runButton.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
 $runButton.ForeColor = [System.Drawing.Color]::White
 $runButton.FlatStyle = "Flat"
 $runButton.Add_Click({
-    if ([string]::IsNullOrEmpty($script:csvPath)) {
-        [System.Windows.Forms.MessageBox]::Show("Select CSV file first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        return
-    }
+    # Check folder is always required
     if ([string]::IsNullOrEmpty($script:folderPath)) {
         [System.Windows.Forms.MessageBox]::Show("Select folder first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         return
     }
-    $res = [System.Windows.Forms.MessageBox]::Show("Start renaming?`n`nCSV: $($script:csvPath)`nFolder: $($script:folderPath)", "Confirm", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    # CSV only required for barcode mode
+    if ($script:renameMode -eq "barcode" -and [string]::IsNullOrEmpty($script:csvPath)) {
+        [System.Windows.Forms.MessageBox]::Show("Select CSV file first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return
+    }
+    $csvMsg = if ($script:csvPath) { "CSV: $($script:csvPath)`n`n" } else { "" }
+    $res = [System.Windows.Forms.MessageBox]::Show("Start renaming?`n`nMode: $($script:renameMode)`n${csvMsg}Folder: $($script:folderPath)", "Confirm", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
     if ($res -ne "Yes") { return }
 
     if ($backupCheckbox.Checked) {
         $backupPath = $script:folderPath + "_backup_" + (Get-Date -Format "yyyy-MM-dd_HH-mm-ss")
         Copy-Item -Path $script:folderPath -Destination $backupPath -Recurse
     }
+
+    # SEQUENTIAL MODE - Rename files inside folders as 1, 2, 3...
+    if ($script:renameMode -eq "sequential") {
+        # Suffix priority function
+        function Get-SuffixPriority {
+            param($suffix)
+            switch ($suffix) {
+                ""      { return 1 }  # No suffix = highest priority
+                "_E"    { return 2 }
+                "_Q"    { return 3 }
+                default { return 999 }  # Unknown suffixes = lowest
+            }
+        }
+
+        $renamedFiles = 0
+        $errors = 0
+        $unknownSuffixes = @{}
+        $totalFiles = 0
+
+        # Get all folders
+        $folders = Get-ChildItem -Path $script:folderPath -Directory
+
+        foreach ($folder in $folders) {
+            # Get files in this folder
+            $files = Get-ChildItem -Path $folder.FullName -File
+            if ($files.Count -eq 0) { continue }
+
+            # Group and sort by suffix
+            $fileGroups = @{}
+            foreach ($file in $files) {
+                $totalFiles++
+                $baseName = $file.BaseName
+
+                # Detect suffix
+                $suffix = ""
+                if ($baseName -match "_E$") { $suffix = "_E" }
+                elseif ($baseName -match "_Q$") { $suffix = "_Q" }
+
+                # Track unknown suffixes
+                $priority = Get-SuffixPriority -suffix $suffix
+                if ($priority -eq 999) {
+                    if (-not $unknownSuffixes.ContainsKey($suffix)) {
+                        $unknownSuffixes[$suffix] = 0
+                    }
+                    $unknownSuffixes[$suffix]++
+                }
+
+                if (-not $fileGroups.ContainsKey($suffix)) {
+                    $fileGroups[$suffix] = @()
+                }
+                $fileGroups[$suffix] += $file
+            }
+
+            # Sort groups by priority, then rename sequentially
+            $sortedSuffixes = $fileGroups.Keys | Sort-Object { Get-SuffixPriority -suffix $_ }
+
+            $fileNumber = 1
+            foreach ($suffix in $sortedSuffixes) {
+                $groupFiles = $fileGroups[$suffix]
+                foreach ($file in $groupFiles) {
+                    $newName = "$fileNumber$($file.Extension)"
+                    try {
+                        Rename-Item -Path $file.FullName -NewName $newName -ErrorAction Stop
+                        $renamedFiles++
+                        $fileNumber++
+                    } catch {
+                        $errors++
+                    }
+                }
+            }
+        }
+
+        # Show warning for unknown suffixes
+        $warningMsg = ""
+        if ($unknownSuffixes.Count -gt 0) {
+            $warningMsg = "`n`n⚠ Unknown suffixes found:`n"
+            foreach ($suffix in $unknownSuffixes.Keys) {
+                $warningMsg += "  $suffix : $($unknownSuffixes[$suffix]) file(s)`n"
+            }
+            $warningMsg += "These files were renamed with lowest priority."
+        }
+
+        $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
+        [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$warningMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        return
+    }
+
+    # BARCODE MODE - Original logic
 
     # Read data from file (Excel or CSV)
     try {
