@@ -224,7 +224,7 @@ $runButton.Add_Click({
         $newSuffixes = @{}
 
         # Known suffixes (base list)
-        $knownSuffixes = @{"", "_E", "_Q"}
+        $knownSuffixes = @("", "_E", "_Q")
 
         # Suffix priority function
         function Get-SuffixPriority {
@@ -489,6 +489,7 @@ $runButton.Add_Click({
 $form.Controls.Add($runButton)
 
 $form.ShowDialog() | Out-Null
+
 
 
 
