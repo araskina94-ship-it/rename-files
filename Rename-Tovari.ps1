@@ -125,6 +125,63 @@ $suffixStatus.Size = New-Object System.Drawing.Size(270, 20)
 $suffixStatus.ForeColor = [System.Drawing.Color]::Gray
 $form.Controls.Add($suffixStatus)
 
+# Suffix Template Download
+$suffixTemplateLabel = New-Object System.Windows.Forms.Label
+$suffixTemplateLabel.Text = "Download Suffix Template"
+$suffixTemplateLabel.Location = New-Object System.Drawing.Point(50, 165)
+$suffixTemplateLabel.Size = New-Object System.Drawing.Size(400, 20)
+$form.Controls.Add($suffixTemplateLabel)
+
+$suffixTemplateButton = New-Object System.Windows.Forms.Button
+$suffixTemplateButton.Text = "Download Template"
+$suffixTemplateButton.Location = New-Object System.Drawing.Point(50, 190)
+$suffixTemplateButton.Size = New-Object System.Drawing.Size(120, 30)
+$suffixTemplateButton.Add_Click({
+    $sfd = New-Object System.Windows.Forms.SaveFileDialog
+    $sfd.Filter = "Excel files (*.xlsx)|*.xlsx"
+    $sfd.FileName = "template-suffix-priority.xlsx"
+    if ($sfd.ShowDialog() -eq "OK") {
+        try {
+            $excel = New-Object -ComObject Excel.Application
+            $excel.Visible = $false
+            $excel.DisplayAlerts = $false
+            $workbook = $excel.Workbooks.Add(1)
+            $sheet = $workbook.Worksheets.Item(1)
+
+            # Headers
+            $sheet.Cells.Item(1, 1).Value = "Suffix"
+            $sheet.Cells.Item(1, 2).Value = "Priority"
+
+            # Sample data
+            $sheet.Cells.Item(2, 1).Value = ""
+            $sheet.Cells.Item(2, 2).Value = 1
+            $sheet.Cells.Item(3, 1).Value = "_E"
+            $sheet.Cells.Item(3, 2).Value = 2
+            $sheet.Cells.Item(4, 1).Value = "_Q"
+            $sheet.Cells.Item(4, 2).Value = 3
+            $sheet.Cells.Item(5, 1).Value = "_RU"
+            $sheet.Cells.Item(5, 2).Value = 4
+
+            # Set column B as integer format
+            $columnB = $sheet.Columns.Item(2)
+            $columnB.NumberFormat = "0"
+
+            $workbook.SaveAs($sfd.FileName, 51)  # 51 = xlsx format
+            $workbook.Close()
+            $excel.Quit()
+
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+
+            [System.Windows.Forms.MessageBox]::Show("Template saved!`n`n" + $sfd.FileName + "`n`nFormat:`n- Suffix: file suffix (e.g., '', '_E', '_Q', '_RU')`n- Priority: number (1 = highest, 999 = lowest)`n`nFiles with lower priority numbers are renamed first.", "Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Error creating Excel file!`n`n" + $_.Exception.Message, "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    }
+})
+$form.Controls.Add($suffixTemplateButton)
+
 # Template Download
 $templateLabel = New-Object System.Windows.Forms.Label
 $templateLabel.Text = "Download CSV Template"
@@ -230,6 +287,8 @@ function Update-GUIForMode {
     $suffixButton.Visible = $false
     $suffixLabel.Visible = $false
     $suffixStatus.Visible = $false
+    $suffixTemplateButton.Visible = $false
+    $suffixTemplateLabel.Visible = $false
 
     # Show based on mode
     switch ($mode) {
@@ -244,6 +303,8 @@ function Update-GUIForMode {
             $suffixButton.Visible = $true
             $suffixLabel.Visible = $true
             $suffixStatus.Visible = $true
+            $suffixTemplateButton.Visible = $true
+            $suffixTemplateLabel.Visible = $true
         }
         "gather" {
             # Nothing extra needed
