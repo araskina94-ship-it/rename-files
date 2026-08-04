@@ -22,6 +22,7 @@ if ($Host.Name -ne "Windows PowerShell ISE") {
 
 $script:csvPath = ""
 $script:folderPath = ""
+$script:suffixConfigPath = ""
 $script:renameMode = "barcode"  # "barcode", "sequential", or "gather"
 
 $form = New-Object System.Windows.Forms.Form
@@ -61,6 +62,7 @@ $modeComboBox.Add_SelectedIndexChanged({
         1 { "sequential" }
         2 { "gather" }
     }
+    Update-GUIForMode -mode $script:renameMode
 })
 $form.Controls.Add($modeComboBox)
 
@@ -92,6 +94,36 @@ $csvStatus.Location = New-Object System.Drawing.Point(180, 125)
 $csvStatus.Size = New-Object System.Drawing.Size(270, 20)
 $csvStatus.ForeColor = [System.Drawing.Color]::Gray
 $form.Controls.Add($csvStatus)
+
+# Suffix Config Selection (for Sequential mode)
+$suffixLabel = New-Object System.Windows.Forms.Label
+$suffixLabel.Text = "Select Suffix Config (Suffix | Priority)"
+$suffixLabel.Location = New-Object System.Drawing.Point(50, 95)
+$suffixLabel.Size = New-Object System.Drawing.Size(400, 20)
+$form.Controls.Add($suffixLabel)
+
+$suffixButton = New-Object System.Windows.Forms.Button
+$suffixButton.Text = "Load Suffix Config"
+$suffixButton.Location = New-Object System.Drawing.Point(50, 120)
+$suffixButton.Size = New-Object System.Drawing.Size(120, 30)
+$suffixButton.Add_Click({
+    $ofd = New-Object System.Windows.Forms.OpenFileDialog
+    $ofd.Filter = "Excel files (*.xlsx;*.xls)|*.xlsx;*.xls"
+    $ofd.Title = "Select Suffix Priority Config"
+    if ($ofd.ShowDialog() -eq "OK") {
+        $script:suffixConfigPath = $ofd.FileName
+        $suffixStatus.Text = "+ " + [System.IO.Path]::GetFileName($script:suffixConfigPath)
+        $suffixStatus.ForeColor = [System.Drawing.Color]::Green
+    }
+})
+$form.Controls.Add($suffixButton)
+
+$suffixStatus = New-Object System.Windows.Forms.Label
+$suffixStatus.Text = "(not selected)"
+$suffixStatus.Location = New-Object System.Drawing.Point(180, 125)
+$suffixStatus.Size = New-Object System.Drawing.Size(270, 20)
+$suffixStatus.ForeColor = [System.Drawing.Color]::Gray
+$form.Controls.Add($suffixStatus)
 
 # Template Download
 $templateLabel = New-Object System.Windows.Forms.Label
@@ -185,6 +217,43 @@ $backupCheckbox.Size = New-Object System.Drawing.Size(200, 25)
 $backupCheckbox.Checked = $true
 $form.Controls.Add($backupCheckbox)
 
+# Dynamic GUI - Function to show/hide controls based on mode
+function Update-GUIForMode {
+    param($mode)
+
+    # Hide all optional controls first
+    $csvButton.Visible = $false
+    $csvLabel.Visible = $false
+    $csvStatus.Visible = $false
+    $templateButton.Visible = $false
+    $templateLabel.Visible = $false
+    $suffixButton.Visible = $false
+    $suffixLabel.Visible = $false
+    $suffixStatus.Visible = $false
+
+    # Show based on mode
+    switch ($mode) {
+        "barcode" {
+            $csvButton.Visible = $true
+            $csvLabel.Visible = $true
+            $csvStatus.Visible = $true
+            $templateButton.Visible = $true
+            $templateLabel.Visible = $true
+        }
+        "sequential" {
+            $suffixButton.Visible = $true
+            $suffixLabel.Visible = $true
+            $suffixStatus.Visible = $true
+        }
+        "gather" {
+            # Nothing extra needed
+        }
+    }
+}
+
+# Initialize GUI for default mode
+Update-GUIForMode -mode $script:renameMode
+
 # Run Button
 $runButton = New-Object System.Windows.Forms.Button
 $runButton.Text = "START RENAMING"
@@ -205,6 +274,11 @@ $runButton.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Select CSV file first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         return
     }
+    # Suffix config only required for sequential mode
+    if (($script:renameMode -eq "sequential") -and [string]::IsNullOrEmpty($script:suffixConfigPath)) {
+        [System.Windows.Forms.MessageBox]::Show("Select suffix config file first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return
+    }
     $csvMsg = if ($script:csvPath) { "CSV: $($script:csvPath)`n`n" } else { "" }
     $res = [System.Windows.Forms.MessageBox]::Show("Start renaming?`n`nMode: $($script:renameMode)`n${csvMsg}Folder: $($script:folderPath)", "Confirm", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
     if ($res -ne "Yes") { return }
@@ -216,94 +290,35 @@ $runButton.Add_Click({
 
     # РЕЖИМ: ПОСЛЕДОВАТЕЛЬНАЯ НУМЕРАЦИЯ
     # Переименовывает файлы внутри папок как 1, 2, 3... по приоритету суффиксов
-    # Приоритет: без суффикса=1, _E=2, _Q=3, остальные=999 (запрашивается у пользователя)
+    # Приоритеты загружаются из Excel файла (Suffix | Priority)
     if ($script:renameMode -eq "sequential") {
-        # Dictionary for user-defined suffix priorities (runtime only)
-        $userDefinedPriorities = @{}
-        # Track new suffixes (not in base list)
-        $newSuffixes = @{}
+        # Load suffix config from Excel
+        try {
+            $excel = New-Object -ComObject Excel.Application
+            $excel.Visible = $false
+            $excel.DisplayAlerts = $false
+            $workbook = $excel.Workbooks.Open($script:suffixConfigPath)
+            $sheet = $workbook.Worksheets.Item(1)
 
-        # Known suffixes (base list)
-        $knownSuffixes = @("", "_E", "_Q")
-
-        # Suffix priority function
-        function Get-SuffixPriority {
-            param($suffix)
-
-            # Check if user already defined this suffix
-            if ($userDefinedPriorities.ContainsKey($suffix)) {
-                return $userDefinedPriorities[$suffix]
-            }
-
-            switch ($suffix) {
-                ""      { return 1 }  # No suffix = highest priority
-                "_E"    { return 2 }
-                "_Q"    { return 3 }
-                default {
-                    # Unknown suffix - ask user with existing mappings shown
-                    $existingMappings = "Уже существующие сопоставления:`n  """"      = 1 (без суффикса)`n  ""_E""    = 2`n  ""_Q""    = 3"
-
-                    # Add any user-defined ones so far
-                    foreach ($k in $userDefinedPriorities.Keys) {
-                        $existingMappings += "`n  ""$k""    = $($userDefinedPriorities[$k])"
-                    }
-
-                    # Build map of all priorities to check for duplicates
-                    $allPriorities = @{}
-                    $allPriorities[""] = 1
-                    $allPriorities["_E"] = 2
-                    $allPriorities["_Q"] = 3
-                    foreach ($k in $userDefinedPriorities.Keys) {
-                        $allPriorities[$k] = $userDefinedPriorities[$k]
-                    }
-
-                    $priority = 0
-                    $confirmed = $false
-
-                    while (-not $confirmed) {
-                        $response = [Microsoft.VisualBasic.Interaction]::InputBox(
-                            "Обнаружен новый суффикс: $suffix`n`n$existingMappings`n`nВведите приоритет (1-999):`nПусто = 999 (самый низкий)",
-                            "Новый суффикс",
-                            "999"
-                        )
-
-                        $priority = if ([string]::IsNullOrEmpty($response)) { 999 } else {
-                            $num = [int]$response
-                            if ($num -lt 1 -or $num -gt 999) { 999 } else { $num }
-                        }
-
-                        # Check for duplicate priority
-                        $duplicate = $null
-                        foreach ($k in $allPriorities.Keys) {
-                            if ($allPriorities[$k] -eq $priority -and $k -ne $suffix) {
-                                $duplicate = $k
-                                break
-                            }
-                        }
-
-                        if ($duplicate) {
-                            $dupMsg = "⚠ Приоритет $priority уже занят суффиксом `"$duplicate`"`n`n"
-                            $dupMsg += "1. Продолжить (будет дубликат)`n"
-                            $dupMsg += "2. Изменить приоритет`n`n"
-                            $dupMsg += "Введите 1 или 2:"
-
-                            $choice = [Microsoft.VisualBasic.Interaction]::InputBox($dupMsg, "Дубликат приоритета", "2")
-                            if ($choice -eq "1") {
-                                $confirmed = $true
-                            } # else loop again
-                        } else {
-                            $confirmed = $true
-                        }
-                    }
-
-                    # Remember for this session and track as new
-                    $userDefinedPriorities[$suffix] = $priority
-                    if (-not $newSuffixes.ContainsKey($suffix)) {
-                        $newSuffixes[$suffix] = $priority
-                    }
-                    return $priority
+            $suffixPriorities = @{}
+            $lastRow = $sheet.UsedRange.Rows.Count
+            for ($i = 2; $i -le $lastRow; $i++) {
+                $suffix = $sheet.Cells.Item($i, 1).Text
+                $priority = $sheet.Cells.Item($i, 2).Text
+                if (-not [string]::IsNullOrWhiteSpace($suffix) -and -not [string]::IsNullOrWhiteSpace($priority)) {
+                    $suffixPriorities[$suffix] = [int]$priority
                 }
             }
+
+            $workbook.Close($false)
+            $excel.Quit()
+
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Error reading suffix config file!`n`n" + $_.Exception.Message, "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            return
         }
 
         $renamedFiles = 0
@@ -330,8 +345,12 @@ $runButton.Add_Click({
                     $suffix = "_" + $matches[1]
                 }
 
-                # Get priority (this will prompt user for new suffixes)
-                $priority = Get-SuffixPriority -suffix $suffix
+                # Get priority from loaded config
+                $priority = if ($suffixPriorities.ContainsKey($suffix)) {
+                    $suffixPriorities[$suffix]
+                } else {
+                    999  # Unknown suffix gets lowest priority
+                }
 
                 if (-not $fileGroups.ContainsKey($suffix)) {
                     $fileGroups[$suffix] = @()
@@ -340,7 +359,7 @@ $runButton.Add_Click({
             }
 
             # Sort groups by priority, then rename sequentially
-            $sortedSuffixes = $fileGroups.Keys | Sort-Object { Get-SuffixPriority -suffix $_ }
+            $sortedSuffixes = $fileGroups.Keys | Sort-Object { if ($suffixPriorities.ContainsKey($_)) { $suffixPriorities[$_] } else { 999 } }
 
             $fileNumber = 1
             foreach ($suffix in $sortedSuffixes) {
@@ -358,24 +377,8 @@ $runButton.Add_Click({
             }
         }
 
-        # Show copy-paste code for new suffixes
-        $copyCode = ""
-        if ($newSuffixes.Count -gt 0) {
-            foreach ($suffix in $newSuffixes.Keys) {
-                $priority = $newSuffixes[$suffix]
-                $copyCode += '        "' + $suffix + '"    { return ' + $priority + " }  # " + $suffix + "`n"
-            }
-        }
-
         $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
-
-        # Show result with copy-paste code for new suffixes
-        if ($copyCode -ne "") {
-            $copyMsg = "`n`n=== КОД ДЛЯ ДОБАВЛЕНИЯ В СКРИПТ ===`nДобавьте в switch блок функции Get-SuffixPriority:`n`n$copyCode"
-            [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$copyMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-        } else {
-            [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-        }
+        [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
     }
 
