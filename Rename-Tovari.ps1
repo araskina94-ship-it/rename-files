@@ -1,5 +1,10 @@
-# Rename Tool - Batch Rename Folders and Files
+﻿# Rename Tool - Batch Rename Folders and Files
 # Works without AI and tokens
+#
+# РЕЖИМЫ РАБОТЫ:
+# 1. Штрихкод (Stokmann) - переименование папок по CSV/Excel файлу (Articul → Barcode)
+# 2. Последовательная нумерация - нумерация файлов внутри папок (1, 2, 3...)
+# 3. Сбор в папки - группировка файлов по базовому имени (до первого _)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -34,7 +39,7 @@ $titleLabel.Size = New-Object System.Drawing.Size(400, 30)
 $titleLabel.TextAlign = "MiddleCenter"
 $form.Controls.Add($titleLabel)
 
-# Mode Selection
+# Mode Selection - Выбор режима переименования
 $modeLabel = New-Object System.Windows.Forms.Label
 $modeLabel.Text = "Rename Mode:"
 $modeLabel.Location = New-Object System.Drawing.Point(50, 60)
@@ -208,7 +213,9 @@ $runButton.Add_Click({
         Copy-Item -Path $script:folderPath -Destination $backupPath -Recurse
     }
 
-    # SEQUENTIAL MODE - Rename files inside folders as 1, 2, 3...
+    # РЕЖИМ: ПОСЛЕДОВАТЕЛЬНАЯ НУМЕРАЦИЯ
+    # Переименовывает файлы внутри папок как 1, 2, 3... по приоритету суффиксов
+    # Приоритет: без суффикса=1, _E=2, _Q=3, остальные=999
     if ($script:renameMode -eq "sequential") {
         # Suffix priority function
         function Get-SuffixPriority {
@@ -294,7 +301,9 @@ $runButton.Add_Click({
         return
     }
 
-    # GATHER MODE - Group files into folders based on base name
+    # РЕЖИМ: СБОР В ПАПКИ
+    # Группирует файлы в папки по базовому имени (до первого символа _)
+    # Пример: GW1157L5_Q.jpg и GW1157L5.jpg → папка GW1157L5/
     if ($script:renameMode -eq "gather") {
         # Get base name (everything before first underscore)
         function Get-BaseName {
@@ -360,7 +369,10 @@ $runButton.Add_Click({
         return
     }
 
-    # BARCODE MODE - Original logic
+    # РЕЖИМ: ШТРИХКОД (Stokmann)
+    # Переименовывает папки по артикулу из CSV/Excel файла
+    # Файлы внутри папок нумеруются как штрихкод-1, штрихкод-2, ...
+    # Требуется CSV/Excel файл с колонками: Articul | Barcode
 
     # Read data from file (Excel or CSV)
     try {
@@ -436,3 +448,4 @@ $runButton.Add_Click({
 $form.Controls.Add($runButton)
 
 $form.ShowDialog() | Out-Null
+
