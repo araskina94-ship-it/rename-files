@@ -382,6 +382,39 @@ $runButton.Add_Click({
             return
         }
 
+        # Check for duplicate priorities
+        $priorityMap = @{}
+        $duplicates = @{}
+
+        foreach ($suffix in $suffixPriorities.Keys) {
+            $priority = $suffixPriorities[$suffix]
+            if (-not $priorityMap.ContainsKey($priority)) {
+                $priorityMap[$priority] = @()
+            }
+            $priorityMap[$priority] += $suffix
+        }
+
+        foreach ($priority in $priorityMap.Keys) {
+            $suffixes = $priorityMap[$priority]
+            if ($suffixes.Count -gt 1) {
+                $duplicates[$priority] = $suffixes
+            }
+        }
+
+        if ($duplicates.Count -gt 0) {
+            $dupMsg = "ОШИБКА: Найдены дубликаты приоритетов!`n`n"
+            $dupMsg += "Каждый приоритет должен быть уникальным.`n`n"
+            $dupMsg += "Проблемные суффиксы:`n"
+            foreach ($priority in $duplicates.Keys) {
+                $suffixList = $duplicates[$priority] -join ", "
+                $dupMsg += "  - Приоритет $priority: $suffixList`n"
+            }
+            $dupMsg += "`nИсправьте конфигурацию (уберите дубликаты или измените приоритеты) и попробуйте снова."
+
+            [System.Windows.Forms.MessageBox]::Show($dupMsg, "Duplicate Priorities Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            return
+        }
+
         $renamedFiles = 0
         $errors = 0
         $totalFiles = 0
