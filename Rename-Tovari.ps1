@@ -220,6 +220,11 @@ $runButton.Add_Click({
     if ($script:renameMode -eq "sequential") {
         # Dictionary for user-defined suffix priorities (runtime only)
         $userDefinedPriorities = @{}
+        # Track new suffixes (not in base list)
+        $newSuffixes = @{}
+
+        # Known suffixes (base list)
+        $knownSuffixes = @{"", "_E", "_Q"}
 
         # Suffix priority function
         function Get-SuffixPriority {
@@ -235,9 +240,16 @@ $runButton.Add_Click({
                 "_E"    { return 2 }
                 "_Q"    { return 3 }
                 default {
-                    # Unknown suffix - ask user
+                    # Unknown suffix - ask user with existing mappings shown
+                    $existingMappings = "Уже существующие сопоставления:`n  """"      = 1 (без суффикса)`n  ""_E""    = 2`n  ""_Q""    = 3"
+
+                    # Add any user-defined ones so far
+                    foreach ($k in $userDefinedPriorities.Keys) {
+                        $existingMappings += "`n  ""$k""    = $($userDefinedPriorities[$k])"
+                    }
+
                     $response = [Microsoft.VisualBasic.Interaction]::InputBox(
-                        "Обнаружен новый суффикс: $suffix`n`nВведите порядковый номер (1-999):`n1 = самый высокий приоритет`nПусто = 999 (самый низкий)",
+                        "Обнаружен новый суффикс: $suffix`n`n$existingMappings`n`nВведите приоритет (1-999):`nПусто = 999 (самый низкий)",
                         "Новый суффикс",
                         "999"
                     )
@@ -247,8 +259,11 @@ $runButton.Add_Click({
                         if ($num -lt 1 -or $num -gt 999) { 999 } else { $num }
                     }
 
-                    # Remember for this session
+                    # Remember for this session and track as new
                     $userDefinedPriorities[$suffix] = $priority
+                    if (-not $newSuffixes.ContainsKey($suffix)) {
+                        $newSuffixes[$suffix] = $priority
+                    }
                     return $priority
                 }
             }
@@ -256,7 +271,6 @@ $runButton.Add_Click({
 
         $renamedFiles = 0
         $errors = 0
-        $unknownSuffixes = @{}
         $totalFiles = 0
 
         # Get all folders
@@ -279,14 +293,8 @@ $runButton.Add_Click({
                     $suffix = "_" + $matches[1]
                 }
 
-                # Track unknown suffixes
+                # Get priority (this will prompt user for new suffixes)
                 $priority = Get-SuffixPriority -suffix $suffix
-                if ($priority -eq 999) {
-                    if (-not $unknownSuffixes.ContainsKey($suffix)) {
-                        $unknownSuffixes[$suffix] = 0
-                    }
-                    $unknownSuffixes[$suffix]++
-                }
 
                 if (-not $fileGroups.ContainsKey($suffix)) {
                     $fileGroups[$suffix] = @()
@@ -313,25 +321,21 @@ $runButton.Add_Click({
             }
         }
 
-        # Show warning for unknown suffixes
-        $warningMsg = ""
+        # Show copy-paste code for new suffixes
         $copyCode = ""
-        if ($unknownSuffixes.Count -gt 0) {
-            $warningMsg = "`n`n⚠ Обнаружены новые суффиксы:`n"
-            foreach ($suffix in $unknownSuffixes.Keys) {
-                $priority = if ($userDefinedPriorities.ContainsKey($suffix)) { $userDefinedPriorities[$suffix] } else { 999 }
-                $warningMsg += "  $suffix : $($unknownSuffixes[$suffix]) файл(ов) - приоритет $priority`n"
+        if ($newSuffixes.Count -gt 0) {
+            foreach ($suffix in $newSuffixes.Keys) {
+                $priority = $newSuffixes[$suffix]
                 $copyCode += '        "' + $suffix + '"    { return ' + $priority + " }  # " + $suffix + "`n"
             }
         }
 
         $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
 
-        # Show result with copy-paste code
+        # Show result with copy-paste code for new suffixes
         if ($copyCode -ne "") {
-            $copyMsg = "`n`n=== КОД ДЛЯ ДОБАВЛЕНИЯ В СКРИПТ ===`n$copyCode"
-            $finalMsg = "Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$warningMsg$copyMsg"
-            [System.Windows.Forms.MessageBox]::Show($finalMsg, "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            $copyMsg = "`n`n=== КОД ДЛЯ ДОБАВЛЕНИЯ В СКРИПТ ===`nДобавьте в switch блок функции Get-SuffixPriority:`n`n$copyCode"
+            [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$copyMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         } else {
             [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         }
@@ -485,6 +489,7 @@ $runButton.Add_Click({
 $form.Controls.Add($runButton)
 
 $form.ShowDialog() | Out-Null
+
 
 
 
