@@ -249,7 +249,10 @@ $runButton.Add_Click({
                     }
 
                     # Build map of all priorities to check for duplicates
-                    $allPriorities = @{"": 1, "_E": 2, "_Q": 3}
+                    $allPriorities = @{}
+                    $allPriorities[""] = 1
+                    $allPriorities["_E"] = 2
+                    $allPriorities["_Q"] = 3
                     foreach ($k in $userDefinedPriorities.Keys) {
                         $allPriorities[$k] = $userDefinedPriorities[$k]
                     }
