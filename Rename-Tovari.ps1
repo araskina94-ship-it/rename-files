@@ -248,15 +248,49 @@ $runButton.Add_Click({
                         $existingMappings += "`n  ""$k""    = $($userDefinedPriorities[$k])"
                     }
 
-                    $response = [Microsoft.VisualBasic.Interaction]::InputBox(
-                        "Обнаружен новый суффикс: $suffix`n`n$existingMappings`n`nВведите приоритет (1-999):`nПусто = 999 (самый низкий)",
-                        "Новый суффикс",
-                        "999"
-                    )
+                    # Build map of all priorities to check for duplicates
+                    $allPriorities = @{"": 1, "_E": 2, "_Q": 3}
+                    foreach ($k in $userDefinedPriorities.Keys) {
+                        $allPriorities[$k] = $userDefinedPriorities[$k]
+                    }
 
-                    $priority = if ([string]::IsNullOrEmpty($response)) { 999 } else {
-                        $num = [int]$response
-                        if ($num -lt 1 -or $num -gt 999) { 999 } else { $num }
+                    $priority = 0
+                    $confirmed = $false
+
+                    while (-not $confirmed) {
+                        $response = [Microsoft.VisualBasic.Interaction]::InputBox(
+                            "Обнаружен новый суффикс: $suffix`n`n$existingMappings`n`nВведите приоритет (1-999):`nПусто = 999 (самый низкий)",
+                            "Новый суффикс",
+                            "999"
+                        )
+
+                        $priority = if ([string]::IsNullOrEmpty($response)) { 999 } else {
+                            $num = [int]$response
+                            if ($num -lt 1 -or $num -gt 999) { 999 } else { $num }
+                        }
+
+                        # Check for duplicate priority
+                        $duplicate = $null
+                        foreach ($k in $allPriorities.Keys) {
+                            if ($allPriorities[$k] -eq $priority -and $k -ne $suffix) {
+                                $duplicate = $k
+                                break
+                            }
+                        }
+
+                        if ($duplicate) {
+                            $dupMsg = "⚠ Приоритет $priority уже занят суффиксом `"$duplicate`"`n`n"
+                            $dupMsg += "1. Продолжить (будет дубликат)`n"
+                            $dupMsg += "2. Изменить приоритет`n`n"
+                            $dupMsg += "Введите 1 или 2:"
+
+                            $choice = [Microsoft.VisualBasic.Interaction]::InputBox($dupMsg, "Дубликат приоритета", "2")
+                            if ($choice -eq "1") {
+                                $confirmed = $true
+                            } # else loop again
+                        } else {
+                            $confirmed = $true
+                        }
                     }
 
                     # Remember for this session and track as new
@@ -489,6 +523,7 @@ $runButton.Add_Click({
 $form.Controls.Add($runButton)
 
 $form.ShowDialog() | Out-Null
+
 
 
 
