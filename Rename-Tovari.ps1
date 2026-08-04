@@ -56,13 +56,13 @@ $form.Controls.Add($modeComboBox)
 # CSV Selection
 $csvLabel = New-Object System.Windows.Forms.Label
 $csvLabel.Text = "Select Excel/CSV file (Articul | Barcode)"
-$csvLabel.Location = New-Object System.Drawing.Point(50, 70)
+$csvLabel.Location = New-Object System.Drawing.Point(50, 95)
 $csvLabel.Size = New-Object System.Drawing.Size(400, 20)
 $form.Controls.Add($csvLabel)
 
 $csvButton = New-Object System.Windows.Forms.Button
 $csvButton.Text = "Select File"
-$csvButton.Location = New-Object System.Drawing.Point(50, 95)
+$csvButton.Location = New-Object System.Drawing.Point(50, 120)
 $csvButton.Size = New-Object System.Drawing.Size(120, 30)
 $csvButton.Add_Click({
     $ofd = New-Object System.Windows.Forms.OpenFileDialog
@@ -77,7 +77,7 @@ $form.Controls.Add($csvButton)
 
 $csvStatus = New-Object System.Windows.Forms.Label
 $csvStatus.Text = "(not selected)"
-$csvStatus.Location = New-Object System.Drawing.Point(180, 100)
+$csvStatus.Location = New-Object System.Drawing.Point(180, 125)
 $csvStatus.Size = New-Object System.Drawing.Size(270, 20)
 $csvStatus.ForeColor = [System.Drawing.Color]::Gray
 $form.Controls.Add($csvStatus)
@@ -85,13 +85,13 @@ $form.Controls.Add($csvStatus)
 # Template Download
 $templateLabel = New-Object System.Windows.Forms.Label
 $templateLabel.Text = "Download CSV Template"
-$templateLabel.Location = New-Object System.Drawing.Point(50, 140)
+$templateLabel.Location = New-Object System.Drawing.Point(50, 165)
 $templateLabel.Size = New-Object System.Drawing.Size(400, 20)
 $form.Controls.Add($templateLabel)
 
 $templateButton = New-Object System.Windows.Forms.Button
 $templateButton.Text = "Download Template"
-$templateButton.Location = New-Object System.Drawing.Point(50, 165)
+$templateButton.Location = New-Object System.Drawing.Point(50, 190)
 $templateButton.Size = New-Object System.Drawing.Size(120, 30)
 $templateButton.Add_Click({
     $sfd = New-Object System.Windows.Forms.SaveFileDialog
@@ -140,13 +140,13 @@ $form.Controls.Add($templateButton)
 # Folder Selection
 $folderLabel = New-Object System.Windows.Forms.Label
 $folderLabel.Text = "Select Folder with Items"
-$folderLabel.Location = New-Object System.Drawing.Point(50, 215)
+$folderLabel.Location = New-Object System.Drawing.Point(50, 240)
 $folderLabel.Size = New-Object System.Drawing.Size(400, 20)
 $form.Controls.Add($folderLabel)
 
 $folderButton = New-Object System.Windows.Forms.Button
 $folderButton.Text = "Select Folder"
-$folderButton.Location = New-Object System.Drawing.Point(50, 240)
+$folderButton.Location = New-Object System.Drawing.Point(50, 265)
 $folderButton.Size = New-Object System.Drawing.Size(120, 30)
 $folderButton.Add_Click({
     $fbd = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -161,7 +161,7 @@ $form.Controls.Add($folderButton)
 
 $folderStatus = New-Object System.Windows.Forms.Label
 $folderStatus.Text = "(not selected)"
-$folderStatus.Location = New-Object System.Drawing.Point(180, 245)
+$folderStatus.Location = New-Object System.Drawing.Point(180, 270)
 $folderStatus.Size = New-Object System.Drawing.Size(270, 20)
 $folderStatus.ForeColor = [System.Drawing.Color]::Gray
 $form.Controls.Add($folderStatus)
@@ -169,7 +169,7 @@ $form.Controls.Add($folderStatus)
 # Backup Checkbox
 $backupCheckbox = New-Object System.Windows.Forms.CheckBox
 $backupCheckbox.Text = "Create Backup Copy"
-$backupCheckbox.Location = New-Object System.Drawing.Point(50, 290)
+$backupCheckbox.Location = New-Object System.Drawing.Point(50, 315)
 $backupCheckbox.Size = New-Object System.Drawing.Size(200, 25)
 $backupCheckbox.Checked = $true
 $form.Controls.Add($backupCheckbox)
@@ -177,7 +177,7 @@ $form.Controls.Add($backupCheckbox)
 # Run Button
 $runButton = New-Object System.Windows.Forms.Button
 $runButton.Text = "START RENAMING"
-$runButton.Location = New-Object System.Drawing.Point(50, 330)
+$runButton.Location = New-Object System.Drawing.Point(50, 355)
 $runButton.Size = New-Object System.Drawing.Size(400, 45)
 $runButton.Font = New-Object System.Drawing.Font("Microsoft Sans Serif", 10, [System.Drawing.FontStyle]::Bold)
 $runButton.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
