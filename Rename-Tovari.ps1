@@ -16,7 +16,7 @@ if ($Host.Name -ne "Windows PowerShell ISE") {
 
 $script:csvPath = ""
 $script:folderPath = ""
-$script:renameMode = "barcode"  # "barcode" or "sequential"
+$script:renameMode = "barcode"  # "barcode", "sequential", or "gather"
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Rename Tool"
@@ -47,9 +47,14 @@ $modeComboBox.Size = New-Object System.Drawing.Size(280, 25)
 $modeComboBox.DropDownStyle = "DropDownList"
 $modeComboBox.Items.Add("Barcode (Stokmann)") | Out-Null
 $modeComboBox.Items.Add("Sequential Numbers") | Out-Null
+$modeComboBox.Items.Add("Gather Folders") | Out-Null
 $modeComboBox.SelectedIndex = 0
 $modeComboBox.Add_SelectedIndexChanged({
-    $script:renameMode = if ($modeComboBox.SelectedIndex -eq 0) { "barcode" } else { "sequential" }
+    $script:renameMode = switch ($modeComboBox.SelectedIndex) {
+        0 { "barcode" }
+        1 { "sequential" }
+        2 { "gather" }
+    }
 })
 $form.Controls.Add($modeComboBox)
 
@@ -190,7 +195,7 @@ $runButton.Add_Click({
         return
     }
     # CSV only required for barcode mode
-    if ($script:renameMode -eq "barcode" -and [string]::IsNullOrEmpty($script:csvPath)) {
+    if (($script:renameMode -eq "barcode") -and [string]::IsNullOrEmpty($script:csvPath)) {
         [System.Windows.Forms.MessageBox]::Show("Select CSV file first!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         return
     }
@@ -286,6 +291,72 @@ $runButton.Add_Click({
 
         $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
         [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$warningMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        return
+    }
+
+    # GATHER MODE - Group files into folders based on base name
+    if ($script:renameMode -eq "gather") {
+        # Get base name (everything before first underscore)
+        function Get-BaseName {
+            param($fileName)
+            $underscorePos = $fileName.IndexOf("_")
+            if ($underscorePos -gt 0) {
+                return $fileName.Substring(0, $underscorePos)
+            } else {
+                return $fileName
+            }
+        }
+
+        $movedFiles = 0
+        $errors = 0
+        $createdFolders = 0
+
+        # Get all files in the selected folder (not recursive)
+        $files = Get-ChildItem -Path $script:folderPath -File
+
+        # Group files by base name
+        $fileGroups = @{}
+        foreach ($file in $files) {
+            $baseName = Get-BaseName -fileName $file.BaseName
+            if (-not $fileGroups.ContainsKey($baseName)) {
+                $fileGroups[$baseName] = @()
+            }
+            $fileGroups[$baseName] += $file
+        }
+
+        # Create folders and move files
+        foreach ($baseName in $fileGroups.Keys) {
+            $folderPath = Join-Path -Path $script:folderPath -ChildPath $baseName
+
+            # Skip if folder already exists (avoid moving files into existing folder)
+            if (Test-Path -Path $folderPath) {
+                [System.Windows.Forms.MessageBox]::Show("Folder '$baseName' already exists!`n`nSkipping this group.", "Warning", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+                continue
+            }
+
+            # Create folder
+            try {
+                New-Item -Path $folderPath -ItemType Directory -ErrorAction Stop | Out-Null
+                $createdFolders++
+            } catch {
+                $errors++
+                continue
+            }
+
+            # Move files to folder
+            foreach ($file in $fileGroups[$baseName]) {
+                $destPath = Join-Path -Path $folderPath -ChildPath $file.Name
+                try {
+                    Move-Item -Path $file.FullName -Destination $destPath -ErrorAction Stop
+                    $movedFiles++
+                } catch {
+                    $errors++
+                }
+            }
+        }
+
+        $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
+        [System.Windows.Forms.MessageBox]::Show("Done!`n`nFolders created: $createdFolders`nFiles moved: $movedFiles`nErrors: $errors$backupMsg", "Gather Folders Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
     }
 
