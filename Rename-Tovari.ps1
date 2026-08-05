@@ -174,7 +174,7 @@ $suffixTemplateButton.Add_Click({
             [System.GC]::Collect()
             [System.GC]::WaitForPendingFinalizers()
 
-            [System.Windows.Forms.MessageBox]::Show("Template saved!`n`n" + $sfd.FileName + "`n`nFormat:`n- Suffix: file suffix (e.g., '', '_E', '_Q', '_RU')`n- Priority: number (1 = highest, 999 = lowest)`n`nFiles with lower priority numbers are renamed first.", "Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            [System.Windows.Forms.MessageBox]::Show("Template saved!`n`n" + $sfd.FileName + "`n`nФормат:`n- Suffix: суффикс файла (напр., '', '_E', '_Q', '_RU')`n- Priority: порядковый номер (1 = самый высокий, 999 = самый низкий)`n`n⚠ ВАЖНО:`n- Каждый приоритет должен быть уникальным!`n- Суффиксы с меньшим номером переименуются первыми.`n- Неизвестные суффиксы получат приоритет 999 (warning).", "Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Error creating Excel file!`n`n" + $_.Exception.Message, "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
         }
@@ -418,6 +418,7 @@ $runButton.Add_Click({
         $renamedFiles = 0
         $errors = 0
         $totalFiles = 0
+        $script:unknownSuffixes = @{}
 
         # Get all folders
         $folders = Get-ChildItem -Path $script:folderPath -Directory
@@ -440,10 +441,15 @@ $runButton.Add_Click({
                 }
 
                 # Get priority from loaded config
-                $priority = if ($suffixPriorities.ContainsKey($suffix)) {
-                    $suffixPriorities[$suffix]
+                if ($suffixPriorities.ContainsKey($suffix)) {
+                    $priority = $suffixPriorities[$suffix]
                 } else {
-                    999  # Unknown suffix gets lowest priority
+                    $priority = 999  # Unknown suffix gets lowest priority
+                    # Track unknown suffix
+                    if (-not $script:unknownSuffixes.ContainsKey($suffix)) {
+                        $script:unknownSuffixes[$suffix] = 0
+                    }
+                    $script:unknownSuffixes[$suffix]++
                 }
 
                 if (-not $fileGroups.ContainsKey($suffix)) {
@@ -472,7 +478,32 @@ $runButton.Add_Click({
         }
 
         $backupMsg = if ($backupCheckbox.Checked) { "`nBackup: $backupPath" } else { "" }
-        [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+
+        # Show warning for unknown suffixes
+        if ($script:unknownSuffixes.Count -gt 0) {
+            $unknownMsg = "`n`n⚠ НЕИЗВЕСТНЫЕ СУФФИКСЫ (получили приоритет 999):`n`n"
+            foreach ($suffix in $script:unknownSuffixes.Keys) {
+                $count = $script:unknownSuffixes[$suffix]
+                $unknownMsg += "- $suffix ($count файл(ов))`n"
+            }
+            $unknownMsg += "`nДобавьте их в конфигурацию для правильного порядка.`n`n"
+            $unknownMsg += "=== ГОТОВЫЙ КОД ДЛЯ ДОБАВЛЕНИЯ ===`n`n"
+
+            # Generate copy-paste code
+            $nextPriority = 1
+            foreach ($suffix in $suffixPriorities.Keys) {
+                $p = $suffixPriorities[$suffix]
+                if ($p -ge $nextPriority) { $nextPriority = $p + 1 }
+            }
+            foreach ($suffix in $script:unknownSuffixes.Keys | Sort-Object) {
+                $unknownMsg += "$suffix | $nextPriority`n"
+                $nextPriority++
+            }
+
+            [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg$unknownMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        } else {
+            [System.Windows.Forms.MessageBox]::Show("Done!`n`nFiles renamed: $renamedFiles`nErrors: $errors$backupMsg", "Sequential Rename Done", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        }
         return
     }
 
