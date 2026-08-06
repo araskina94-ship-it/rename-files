@@ -1,4 +1,4 @@
-﻿# Rename Tool - Batch Rename Folders and Files
+# Rename Tool - Batch Rename Folders and Files
 # Works without AI and tokens
 #
 # РЕЖИМЫ РАБОТЫ:
@@ -52,7 +52,7 @@ $modeComboBox = New-Object System.Windows.Forms.ComboBox
 $modeComboBox.Location = New-Object System.Drawing.Point(170, 58)
 $modeComboBox.Size = New-Object System.Drawing.Size(280, 25)
 $modeComboBox.DropDownStyle = "DropDownList"
-$modeComboBox.Items.Add("Barcode (Stokmann)") | Out-Null
+$modeComboBox.Items.Add("Rename by List") | Out-Null
 $modeComboBox.Items.Add("Sequential Numbers") | Out-Null
 $modeComboBox.Items.Add("Gather Folders") | Out-Null
 $modeComboBox.SelectedIndex = 0
@@ -68,7 +68,7 @@ $form.Controls.Add($modeComboBox)
 
 # CSV Selection
 $csvLabel = New-Object System.Windows.Forms.Label
-$csvLabel.Text = "Select Excel/CSV file (Articul | Barcode)"
+$csvLabel.Text = "Select Excel/CSV file (Old Name \| New Name)"
 $csvLabel.Location = New-Object System.Drawing.Point(50, 95)
 $csvLabel.Size = New-Object System.Drawing.Size(400, 20)
 $form.Controls.Add($csvLabel)
@@ -206,8 +206,8 @@ $templateButton.Add_Click({
             $sheet = $workbook.Worksheets.Item(1)
 
             # Headers
-            $sheet.Cells.Item(1, 1).Value = "Articul"
-            $sheet.Cells.Item(1, 2).Value = "Barcode"
+            $sheet.Cells.Item(1, 1).Value = "Old Name"
+            $sheet.Cells.Item(1, 2).Value = "New Name"
 
             # Sample data
             $sheet.Cells.Item(2, 1).Value = "ART001"
