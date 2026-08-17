@@ -1,4 +1,4 @@
-# Rename Tool - Batch Rename Folders and Files
+﻿# Rename Tool - Batch Rename Folders and Files
 # Works without AI and tokens
 #
 # РЕЖИМЫ РАБОТЫ:
@@ -407,7 +407,7 @@ $runButton.Add_Click({
             $dupMsg += "Проблемные суффиксы:`n"
             foreach ($priority in $duplicates.Keys) {
                 $suffixList = $duplicates[$priority] -join ", "
-                $dupMsg += "  - Приоритет $priority: $suffixList`n"
+                $dupMsg += "  - Приоритет ${priority}: $suffixList`n"
             }
             $dupMsg += "`nИсправьте конфигурацию (уберите дубликаты или измените приоритеты) и попробуйте снова."
 
